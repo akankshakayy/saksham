@@ -54,13 +54,17 @@ async def get_ai_recommendation(context: WorkflowContext) -> AIRecommendation:
 
     if not settings.llm_api_key:
         logger.warning("No LLM API key configured, using rule-based recommendation")
-        return _rule_based_recommendation(context)
+        rec = _rule_based_recommendation(context)
+        rec.source = "rule_based_fallback"
+        return rec
 
     try:
         return await _llm_recommendation(settings, context)
     except Exception as e:
         logger.warning("LLM recommendation failed, falling back to rule-based: %s", e)
-        return _rule_based_recommendation(context)
+        rec = _rule_based_recommendation(context)
+        rec.source = "rule_based_fallback"
+        return rec
 
 
 async def _llm_recommendation(
@@ -99,7 +103,10 @@ async def _llm_recommendation(
     data = response.json()
     raw_text = data["choices"][0]["message"]["content"]
 
-    return _parse_recommendation(raw_text)
+    rec = _parse_recommendation(raw_text)
+    rec.source = "openrouter"
+    rec.model = settings.llm_model
+    return rec
 
 
 def _parse_recommendation(raw_text: str) -> AIRecommendation:

@@ -455,7 +455,5 @@ async def test_api_returns_503_on_persistence_failure(db):
 
     assert response.status_code == 503
     body = response.json()
-    assert "detail" in body
-    detail = body["detail"]
-    assert detail["error_code"] == "PERSISTENCE_FAILURE"
-    assert "Application could not be saved" in detail["message"]
+    assert body["error_code"] == "PERSISTENCE_FAILURE"
+    assert "Application could not be saved" in body["message"]

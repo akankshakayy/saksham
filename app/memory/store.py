@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -85,7 +86,8 @@ class WorkflowMemory:
         except Exception as exc:
             context.updated_at = previous_updated_at
             raise PersistenceError(
-                f"Failed to persist workflow context for {context.application.application_id}: {exc}",
+                f"Failed to persist workflow context for "
+                f"{context.application.application_id}: {exc}",
                 application_id=context.application.application_id,
             ) from exc
 
@@ -129,6 +131,88 @@ class WorkflowMemory:
             for row in rows
         ]
 
+    async def list_applications_paginated(
+        self,
+        *,
+        state: str | None = None,
+        risk_level: str | None = None,
+        final_decision: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """List applications with filtering, pagination, and total count.
+
+        Returns (applications, total_count). Risk level is extracted from context_json.
+        Newest-first ordering.
+        """
+        db = self._get_db()
+
+        base_query = (
+            "SELECT application_id, current_state, final_decision, "
+            "context_json, created_at, updated_at FROM workflow_contexts"
+        )
+        count_query = "SELECT COUNT(*) as cnt FROM workflow_contexts"
+        params: list[Any] = []
+        count_params: list[Any] = []
+        conditions: list[str] = []
+
+        if state:
+            conditions.append("current_state = ?")
+            params.append(state)
+            count_params.append(state)
+        if final_decision:
+            conditions.append("final_decision = ?")
+            params.append(final_decision)
+            count_params.append(final_decision)
+
+        where_clause = ""
+        if conditions:
+            where_clause_state = " AND ".join(conditions)
+            where_clause = f" WHERE {where_clause_state}"
+
+        # For risk_level we need to filter after extracting from context_json
+        risk_condition = ""
+        if risk_level:
+            risk_condition = " AND json_extract(context_json, '$.risk_assessment.risk_level') = ?"
+            params.append(risk_level)
+            count_params.append(risk_level)
+
+        count_sql = count_query + where_clause + risk_condition
+        cursor = await db.conn.execute(count_sql, count_params)
+        total = (await cursor.fetchone())["cnt"]
+
+        data_sql = (
+            base_query
+            + where_clause
+            + risk_condition
+            + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        )
+        params.extend([limit, offset])
+        cursor = await db.conn.execute(data_sql, params)
+        rows = await cursor.fetchall()
+
+        applications = []
+        for row in rows:
+            risk_level_val = None
+            try:
+                ctx = json.loads(row["context_json"])
+                risk_level_val = ctx.get("risk_assessment", {}).get("risk_level")
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            applications.append(
+                {
+                    "application_id": row["application_id"],
+                    "current_state": row["current_state"],
+                    "final_decision": row["final_decision"],
+                    "risk_level": risk_level_val,
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+
+        return applications, total
+
     async def delete(self, application_id: str) -> bool:
         """Delete an application and its audit events."""
         db = self._get_db()
@@ -162,9 +246,7 @@ class DocumentStore:
             return self._db
         return get_database()
 
-    async def get_documents_for_application(
-        self, application_id: str
-    ) -> list[dict[str, Any]]:
+    async def get_documents_for_application(self, application_id: str) -> list[dict[str, Any]]:
         """Retrieve all persisted document records for an application."""
         db = self._get_db()
         cursor = await db.conn.execute(
@@ -174,26 +256,7 @@ class DocumentStore:
         rows = await cursor.fetchall()
         results = []
         for row in rows:
-            results.append({
-                "document_id": row["document_id"],
-                "application_id": row["application_id"],
-                "document_type": row["document_type"],
-                "original_filename": row["original_filename"],
-                "stored_path": row["stored_path"],
-                "processing_status": row["processing_status"],
-                "raw_text": row["raw_text"] or "",
-                "raw_text_available": bool(row["raw_text_available"]),
-                "ocr_confidence": row["ocr_confidence"],
-                "field_extraction_confidence": row["field_extraction_confidence"],
-                "overall_confidence": row["overall_confidence"],
-                "extracted_fields_json": row["extracted_fields_json"] or "{}",
-                "processing_method": row["processing_method"] or "",
-                "error_code": row["error_code"],
-                "error_message": row["error_message"],
-                "attempt_count": row["attempt_count"],
-                "created_at": row["created_at"],
-                "processed_at": row["processed_at"],
-            })
+            results.append(self._row_to_dict(row))
         return results
 
     async def get_document(self, document_id: str) -> dict[str, Any] | None:
@@ -206,6 +269,59 @@ class DocumentStore:
         row = await cursor.fetchone()
         if row is None:
             return None
+        return self._row_to_dict(row)
+
+    async def get_document_for_application(
+        self, application_id: str, document_id: str
+    ) -> dict[str, Any] | None:
+        """Retrieve a single document record scoped to an application."""
+        db = self._get_db()
+        cursor = await db.conn.execute(
+            "SELECT * FROM documents WHERE document_id = ? AND application_id = ?",
+            (document_id, application_id),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_dict(row)
+
+    async def save_document(self, result: Any) -> None:
+        """Persist a document processing result to SQLite."""
+        db = self._get_db()
+        await db.conn.execute(
+            """INSERT INTO documents
+            (document_id, application_id, document_type, original_filename,
+             stored_path, processing_status, raw_text, raw_text_available,
+             ocr_confidence, field_extraction_confidence, overall_confidence,
+             extracted_fields_json, processing_method, error_code, error_message,
+             attempt_count, created_at, processed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                result.document_id,
+                result.application_id,
+                result.document_type,
+                result.original_filename,
+                result.stored_path,
+                result.processing_status,
+                result.raw_text,
+                1 if result.raw_text_available else 0,
+                result.ocr_confidence,
+                result.field_extraction_confidence,
+                result.overall_confidence,
+                json.dumps(result.extracted_fields),
+                result.processing_method,
+                result.error_code,
+                result.error_message,
+                result.attempt_count,
+                result.created_at,
+                result.processed_at,
+            ),
+        )
+        await db.conn.commit()
+
+    @staticmethod
+    def _row_to_dict(row: Any) -> dict[str, Any]:
+        """Convert a database row to a document dict."""
         return {
             "document_id": row["document_id"],
             "application_id": row["application_id"],

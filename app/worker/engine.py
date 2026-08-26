@@ -344,6 +344,8 @@ class WorkerEngine:
                 "recommended_action": context.recommendation.recommended_action.value,
                 "confidence": context.recommendation.confidence,
                 "reason": context.recommendation.reason,
+                "source": context.recommendation.source,
+                "model": context.recommendation.model,
             },
         )
 

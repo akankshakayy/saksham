@@ -49,6 +49,11 @@ class Settings(BaseSettings):
         "application/pdf",
     ]
 
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
+
 
 @lru_cache
 def get_settings() -> Settings:

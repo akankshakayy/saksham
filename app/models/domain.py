@@ -87,6 +87,8 @@ class AIRecommendation(BaseModel):
     risk_level: RiskLevel
     reason: str
     evidence: list[str] = Field(default_factory=list)
+    source: str = "unknown"
+    model: str | None = None
 
 
 class WorkflowContext(BaseModel):

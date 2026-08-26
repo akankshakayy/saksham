@@ -74,7 +74,12 @@ async def test_list_applications():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/api/v1/applications")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    data = response.json()
+    assert "applications" in data
+    assert "total" in data
+    assert "limit" in data
+    assert "offset" in data
+    assert isinstance(data["applications"], list)
 
 
 @pytest.mark.asyncio

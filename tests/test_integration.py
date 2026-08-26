@@ -49,12 +49,42 @@ async def db(tmp_path):
     await database.close()
 
 
+def _deterministic_recommendation(context):
+    """Deterministic LLM mock: APPROVE when all checks pass, ESCALATE for high risk."""
+    from app.models.domain import AIRecommendation
+
+    if context.risk_assessment and context.risk_assessment.risk_level.value in ("HIGH", "CRITICAL"):
+        return AIRecommendation(
+            recommended_action=FinalDecision.ESCALATE_TO_HUMAN,
+            confidence=0.85,
+            risk_level=context.risk_assessment.risk_level,
+            reason="High risk detected",
+            evidence=[],
+            source="test_mock",
+            model=None,
+        )
+    return AIRecommendation(
+        recommended_action=FinalDecision.APPROVE,
+        confidence=0.9,
+        risk_level=context.risk_assessment.risk_level if context.risk_assessment else "LOW",
+        reason="All verification checks passed",
+        evidence=["Application data validated", "Document data matches"],
+        source="test_mock",
+        model=None,
+    )
+
+
 @pytest.fixture
 async def engine(db):
     memory = WorkflowMemory(db=db)
     audit = AuditLogger(db=db)
     doc_store = DocumentStore(db=db)
-    return WorkerEngine(memory=memory, audit=audit, document_store=doc_store)
+    eng = WorkerEngine(memory=memory, audit=audit, document_store=doc_store)
+    with patch(
+        "app.worker.engine.get_ai_recommendation",
+        side_effect=_deterministic_recommendation,
+    ):
+        yield eng
 
 
 class TestNameExtractionFix:
