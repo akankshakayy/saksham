@@ -140,6 +140,7 @@ class OnboardingService:
         state: str | None = None,
         risk_level: str | None = None,
         final_decision: str | None = None,
+        q: str | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> ListApplicationsResponse:
@@ -155,6 +156,7 @@ class OnboardingService:
             state=state,
             risk_level=risk_level,
             final_decision=final_decision,
+            q=q,
             limit=limit,
             offset=offset,
         )
@@ -163,9 +165,12 @@ class OnboardingService:
             applications=[
                 ApplicationSummaryResponse(
                     application_id=a["application_id"],
+                    applicant_name=a["applicant_name"],
+                    business_name=a["business_name"],
                     current_state=a["current_state"],
                     final_decision=a["final_decision"],
                     risk_level=a["risk_level"],
+                    risk_score=a["risk_score"],
                     created_at=a["created_at"],
                     updated_at=a["updated_at"],
                 )

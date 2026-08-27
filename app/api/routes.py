@@ -115,6 +115,7 @@ async def list_applications(
     state: str | None = Query(None, description="Filter by workflow state"),
     risk_level: str | None = Query(None, description="Filter by risk level"),
     final_decision: str | None = Query(None, description="Filter by final decision"),
+    q: str | None = Query(None, description="Search by name or application ID"),
     limit: int = Query(20, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
 ) -> ListApplicationsResponse:
@@ -159,6 +160,7 @@ async def list_applications(
         state=state,
         risk_level=risk_level,
         final_decision=final_decision,
+        q=q,
         limit=limit,
         offset=offset,
     )

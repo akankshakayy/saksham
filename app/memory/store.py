@@ -137,12 +137,14 @@ class WorkflowMemory:
         state: str | None = None,
         risk_level: str | None = None,
         final_decision: str | None = None,
+        q: str | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
-        """List applications with filtering, pagination, and total count.
+        """List applications with filtering, search, pagination, and total count.
 
-        Returns (applications, total_count). Risk level is extracted from context_json.
+        Returns (applications, total_count). Risk level, applicant name,
+        business name, and risk score are extracted from context_json.
         Newest-first ordering.
         """
         db = self._get_db()
@@ -164,48 +166,63 @@ class WorkflowMemory:
             conditions.append("final_decision = ?")
             params.append(final_decision)
             count_params.append(final_decision)
+        if risk_level:
+            conditions.append(
+                "json_extract(context_json, '$.risk_assessment.risk_level') = ?"
+            )
+            params.append(risk_level)
+            count_params.append(risk_level)
+        if q:
+            conditions.append(
+                "("
+                "json_extract(context_json, '$.application.applicant_name') LIKE ?"
+                " OR json_extract(context_json, '$.application.business_name') LIKE ?"
+                " OR application_id LIKE ?"
+                ")"
+            )
+            like_term = f"%{q}%"
+            params.extend([like_term, like_term, like_term])
+            count_params.extend([like_term, like_term, like_term])
 
         where_clause = ""
         if conditions:
-            where_clause_state = " AND ".join(conditions)
-            where_clause = f" WHERE {where_clause_state}"
+            where_clause = f" WHERE {' AND '.join(conditions)}"
 
-        # For risk_level we need to filter after extracting from context_json
-        risk_condition = ""
-        if risk_level:
-            risk_condition = " AND json_extract(context_json, '$.risk_assessment.risk_level') = ?"
-            params.append(risk_level)
-            count_params.append(risk_level)
-
-        count_sql = count_query + where_clause + risk_condition
+        count_sql = count_query + where_clause
         cursor = await db.conn.execute(count_sql, count_params)
         total = (await cursor.fetchone())["cnt"]
 
-        data_sql = (
-            base_query
-            + where_clause
-            + risk_condition
-            + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
-        )
+        data_sql = base_query + where_clause + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         cursor = await db.conn.execute(data_sql, params)
         rows = await cursor.fetchall()
 
         applications = []
         for row in rows:
+            applicant_name = None
+            business_name = None
             risk_level_val = None
+            risk_score_val = None
             try:
                 ctx = json.loads(row["context_json"])
-                risk_level_val = ctx.get("risk_assessment", {}).get("risk_level")
+                applicant_name = ctx.get("application", {}).get("applicant_name")
+                business_name = ctx.get("application", {}).get("business_name")
+                risk_assessment = ctx.get("risk_assessment")
+                if risk_assessment:
+                    risk_level_val = risk_assessment.get("risk_level")
+                    risk_score_val = risk_assessment.get("risk_score")
             except (json.JSONDecodeError, TypeError):
                 pass
 
             applications.append(
                 {
                     "application_id": row["application_id"],
+                    "applicant_name": applicant_name,
+                    "business_name": business_name,
                     "current_state": row["current_state"],
                     "final_decision": row["final_decision"],
                     "risk_level": risk_level_val,
+                    "risk_score": risk_score_val,
                     "created_at": row["created_at"],
                     "updated_at": row["updated_at"],
                 }

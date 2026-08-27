@@ -111,9 +111,12 @@ class ApplicationSummaryResponse(BaseModel):
     """Summary of an application for list views."""
 
     application_id: str
+    applicant_name: str | None = None
+    business_name: str | None = None
     current_state: WorkflowState
     final_decision: FinalDecision | None = None
     risk_level: RiskLevel | None = None
+    risk_score: float | None = None
     created_at: str
     updated_at: str
 
