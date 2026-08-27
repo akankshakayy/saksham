@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
 from app.config.settings import get_settings
+from app.mcp import create_mcp_server
 from app.memory.database import close_database, init_database
 
 
@@ -36,6 +37,9 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(router, prefix="/api/v1")
+
+    mcp_server = create_mcp_server()
+    app.mount("/mcp", mcp_server.streamable_http_app())
 
     return app
 
