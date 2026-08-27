@@ -11,6 +11,7 @@ from app.models.domain import (
     ApplicationDocument,
     ExtractedDocumentData,
     OnboardingApplication,
+    WorkflowContext,
 )
 from app.models.states import EventType, FinalDecision, RiskLevel, WorkflowState
 from app.worker.engine import WorkerEngine
@@ -284,3 +285,225 @@ async def test_llm_approve_allowed_for_low_risk(engine: WorkerEngine):
     assert context.recommendation.recommended_action == FinalDecision.APPROVE
     assert context.final_decision == FinalDecision.APPROVE
     assert context.current_state == WorkflowState.APPROVED
+
+
+@pytest.mark.asyncio
+async def test_rule_based_no_documents_requests_information(engine: WorkerEngine):
+    """Rule-based recommendation must not APPROVE when no documents exist.
+
+    Given: extracted_data=[], missing_fields=[], risk_level=MEDIUM
+    Expected: REQUEST_MORE_INFORMATION (not APPROVE)
+    """
+    from app.tools.llm_analysis import _rule_based_recommendation
+    from app.models.domain import RiskAssessment
+
+    app = OnboardingApplication(
+        applicant_name="John Doe",
+        business_name="Doe Enterprises",
+        pan_number="ABCDE1234F",
+        phone="9876543210",
+    )
+    context = WorkflowContext(application=app)
+    context.risk_assessment = RiskAssessment(
+        risk_level=RiskLevel.MEDIUM,
+        risk_score=0.45,
+        risk_factors=[
+            "No document data available for verification",
+            "No PAN or GST verification available",
+        ],
+    )
+
+    rec = _rule_based_recommendation(context)
+
+    assert rec.recommended_action == FinalDecision.REQUEST_MORE_INFORMATION
+    assert rec.recommended_action != FinalDecision.APPROVE
+    assert rec.risk_level == RiskLevel.MEDIUM
+
+
+@pytest.mark.asyncio
+async def test_no_documents_llm_approve_overridden_by_policy(engine: WorkerEngine):
+    """Defense-in-depth: even if LLM recommends APPROVE with no documents,
+    the policy engine MUST override to REQUEST_MORE_INFORMATION.
+
+    This is the most critical regression test.
+    """
+    app = OnboardingApplication(
+        applicant_name="John Doe",
+        business_name="Doe Enterprises",
+        pan_number="ABCDE1234F",
+        phone="9876543210",
+    )
+
+    mock_recommendation = AIRecommendation(
+        recommended_action=FinalDecision.APPROVE,
+        confidence=0.95,
+        risk_level=RiskLevel.LOW,
+        reason="All checks pass",
+        evidence=[],
+    )
+
+    with patch(
+        "app.worker.engine.get_ai_recommendation",
+        return_value=mock_recommendation,
+    ):
+        context = await engine.process_application(app)
+
+    assert context.recommendation is not None
+    assert context.recommendation.recommended_action == FinalDecision.APPROVE
+    assert context.final_decision == FinalDecision.REQUEST_MORE_INFORMATION
+    assert context.current_state == WorkflowState.MORE_INFORMATION_REQUIRED
+
+    events = await engine.get_application_history(app.application_id)
+    policy_events = [e for e in events if e.event_type == EventType.POLICY_DECISION]
+    assert len(policy_events) == 1
+    assert policy_events[0].metadata["decision"] == FinalDecision.REQUEST_MORE_INFORMATION.value
+
+
+@pytest.mark.asyncio
+async def test_no_documents_recommendation_no_fabricated_evidence(engine: WorkerEngine):
+    """The rule-based recommendation for no-documents must NOT claim
+    'Document data matches' or any equivalent unsupported claim.
+    """
+    from app.tools.llm_analysis import _rule_based_recommendation
+    from app.models.domain import RiskAssessment
+
+    app = OnboardingApplication(
+        applicant_name="John Doe",
+        business_name="Doe Enterprises",
+        pan_number="ABCDE1234F",
+        phone="9876543210",
+    )
+    context = WorkflowContext(application=app)
+    context.risk_assessment = RiskAssessment(
+        risk_level=RiskLevel.MEDIUM,
+        risk_score=0.45,
+        risk_factors=[
+            "No document data available for verification",
+            "No PAN or GST verification available",
+        ],
+    )
+
+    rec = _rule_based_recommendation(context)
+
+    evidence_text = " ".join(rec.evidence).lower()
+    assert "document data matches" not in evidence_text
+    assert "all verification checks passed" not in rec.reason.lower()
+    assert "document verification" in rec.reason.lower() or "required" in rec.reason.lower()
+    assert len(rec.evidence) > 0
+
+
+@pytest.mark.asyncio
+async def test_verified_application_can_still_be_approved(engine: WorkerEngine):
+    """Ensure the new rule does not overcorrect: a properly verified
+    application with extracted documents should still be APPROVABLE."""
+    app = OnboardingApplication(
+        applicant_name="John Doe",
+        business_name="Doe Enterprises",
+        pan_number="ABCDE1234F",
+        phone="9876543210",
+        email="john@example.com",
+        documents=[
+            ApplicationDocument(
+                document_type="pan_card",
+                raw_text="Name: John Doe\nPAN: ABCDE1234F",
+            )
+        ],
+    )
+
+    extracted_data = ExtractedDocumentData(
+        document_id=app.documents[0].document_id,
+        document_type="pan_card",
+        extracted_fields={
+            "pan_number": "ABCDE1234F",
+            "phone": "9876543210",
+            "email": "john@example.com",
+        },
+        confidence=0.95,
+        extraction_method="ocr",
+    )
+
+    mock_recommendation = AIRecommendation(
+        recommended_action=FinalDecision.APPROVE,
+        confidence=0.9,
+        risk_level=RiskLevel.LOW,
+        reason="All checks pass",
+        evidence=[],
+    )
+
+    with (
+        patch(
+            "app.worker.engine.extract_document_data",
+            return_value=extracted_data,
+        ),
+        patch(
+            "app.worker.engine.get_ai_recommendation",
+            return_value=mock_recommendation,
+        ),
+    ):
+        context = await engine.process_application(app)
+
+    assert len(context.extracted_data) > 0
+    assert context.risk_assessment is not None
+    assert context.risk_assessment.risk_level == RiskLevel.LOW
+    assert context.final_decision == FinalDecision.APPROVE
+    assert context.current_state == WorkflowState.APPROVED
+
+
+@pytest.mark.asyncio
+async def test_critical_risk_protection_still_intact(engine: WorkerEngine):
+    """Verify that CRITICAL risk + AI APPROVE still produces ESCALATE_TO_HUMAN.
+
+    This is the existing protection — ensure it was not weakened.
+    """
+    app = OnboardingApplication(
+        applicant_name="Saksham Test",
+        business_name="Saksham Test Pvt Ltd",
+        pan_number="AABCT1234D",
+        phone="6111111111",
+        email="wrong@example.com",
+        documents=[
+            ApplicationDocument(
+                document_type="pan_card",
+                raw_text="Name: Saksham Test Pvt Ltd\nPAN: ABCDE1234F",
+            )
+        ],
+    )
+
+    extracted_data = ExtractedDocumentData(
+        document_id=app.documents[0].document_id,
+        document_type="pan_card",
+        extracted_fields={
+            "pan_number": "ABCDE1234F",
+            "phone": "9876543210",
+            "email": "test@example.com",
+        },
+        confidence=0.95,
+        extraction_method="ocr",
+    )
+
+    mock_recommendation = AIRecommendation(
+        recommended_action=FinalDecision.APPROVE,
+        confidence=0.9,
+        risk_level=RiskLevel.LOW,
+        reason="All checks pass",
+        evidence=[],
+    )
+
+    with (
+        patch(
+            "app.worker.engine.extract_document_data",
+            return_value=extracted_data,
+        ),
+        patch(
+            "app.worker.engine.get_ai_recommendation",
+            return_value=mock_recommendation,
+        ),
+    ):
+        context = await engine.process_application(app)
+
+    assert context.risk_assessment is not None
+    assert context.risk_assessment.risk_level == RiskLevel.CRITICAL
+    assert context.recommendation is not None
+    assert context.recommendation.recommended_action == FinalDecision.APPROVE
+    assert context.final_decision == FinalDecision.ESCALATE_TO_HUMAN
+    assert context.current_state == WorkflowState.ESCALATED

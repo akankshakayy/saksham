@@ -542,7 +542,8 @@ Two Execution Paths:
    - 3+ inconsistencies → ESCALATE_TO_HUMAN (confidence 0.7)
    - 1–2 inconsistencies → REQUEST_MORE_INFORMATION (confidence 0.75)
    - Low extraction confidence → ESCALATE_TO_HUMAN (confidence 0.65)
-   - All checks pass → APPROVE (confidence 0.8)
+   - No extracted document data → REQUEST_MORE_INFORMATION (confidence 0.9)
+   - All checks pass with documents → APPROVE (confidence 0.8)
 
 2. **LLM path** (optional, used when `llm_api_key` is configured):
    - Sends verification context to OpenRouter LLM endpoint
@@ -567,7 +568,7 @@ Worker Response:
 
 Example (rule-based):
 ```
-Input: context with no missing fields, LOW risk, all data matching
+Input: context with no missing fields, extracted documents, LOW risk, all data matching
 Output: AIRecommendation(recommended_action=APPROVE, confidence=0.8, risk_level=LOW, reason="All verification checks passed")
 ```
 
@@ -941,6 +942,7 @@ The AI Recommendation tool is the only probabilistic component. It is advisory.
 Policy enforcement examples:
 - LLM says APPROVE, but risk is CRITICAL → APPROVE does not happen. Policy escalates.
 - LLM says APPROVE, but confidence is below threshold → APPROVE does not happen. Policy escalates.
+- LLM says APPROVE, but no extracted documents exist → APPROVE does not happen. Policy requests more information.
 - LLM says REJECT, but risk is LOW/MEDIUM → REJECT does not happen. Policy escalates (reject is blocked for non-critical risk).
 
 The policy engine (`_enforce_policy`) is the final authority. The LLM informs but does not override.

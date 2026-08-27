@@ -191,10 +191,24 @@ def _rule_based_recommendation(context: WorkflowContext) -> AIRecommendation:
             ],
         )
 
+    if not context.extracted_data:
+        risk_level = context.risk_assessment.risk_level if context.risk_assessment else RiskLevel.MEDIUM
+        risk_factors = context.risk_assessment.risk_factors if context.risk_assessment else []
+        return AIRecommendation(
+            recommended_action=FinalDecision.REQUEST_MORE_INFORMATION,
+            confidence=0.9,
+            risk_level=risk_level,
+            reason="Document verification is required before approval",
+            evidence=risk_factors if risk_factors else [
+                "No document data available for verification",
+                "No PAN or GST verification available",
+            ],
+        )
+
     return AIRecommendation(
         recommended_action=FinalDecision.APPROVE,
         confidence=0.8,
-        risk_level=RiskLevel.LOW,
+        risk_level=context.risk_assessment.risk_level if context.risk_assessment else RiskLevel.LOW,
         reason="All verification checks passed",
         evidence=["Application data validated", "Document data matches", "Risk level acceptable"],
     )

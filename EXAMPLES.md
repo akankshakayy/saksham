@@ -706,6 +706,7 @@ AI RECOMMENDATION
 POLICY EVALUATION
   CRITICAL risk? No → no override
   Low confidence? No → no override
+  No extracted documents? No → no override
   Missing fields? No → no override
   Retry exhausted? No → no override
   → recommendation stands

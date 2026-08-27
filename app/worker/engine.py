@@ -388,6 +388,13 @@ class WorkerEngine:
                 )
                 return FinalDecision.ESCALATE_TO_HUMAN
 
+        if not context.extracted_data:
+            if rec.recommended_action == FinalDecision.APPROVE:
+                logger.warning(
+                    "Policy override: cannot approve without extracted document data"
+                )
+                return FinalDecision.REQUEST_MORE_INFORMATION
+
         if context.missing_fields:
             return FinalDecision.REQUEST_MORE_INFORMATION
 
