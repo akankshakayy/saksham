@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from app.audit.provenance import Interface, get_call_context
 from app.memory.database import Database, get_database
 from app.memory.errors import AuditPersistenceError
 from app.models.domain import AuditEvent
@@ -44,13 +45,23 @@ class AuditLogger:
         whether to continue. The event object is still returned so the caller
         knows what was attempted.
         """
+        merged_metadata = dict(metadata) if metadata else {}
+
+        interface, tool_name = get_call_context()
+        if interface is not None:
+            merged_metadata["interface"] = interface.value
+            if tool_name is not None:
+                merged_metadata["tool"] = tool_name
+            if interface == Interface.MCP and actor == "SAKSHAM":
+                actor = "MCP_CLIENT"
+
         event = AuditEvent(
             application_id=application_id,
             state=state,
             event_type=event_type,
             action=action,
             result=result,
-            metadata=metadata or {},
+            metadata=merged_metadata,
             actor=actor,
         )
 

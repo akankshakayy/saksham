@@ -79,6 +79,8 @@ flowchart TD
 - **Persistent state:** SQLite-backed workflow context survives process restarts
 - **Document reuse:** Cached extraction results avoid redundant OCR
 - **Full auditability:** Every action recorded in SQLite with event IDs, timestamps, and metadata
+- **MCP integration:** 9 read-only tools exposed via streamable-http for external agent access
+- **Provenance tracking:** Every audit event tagged with Interface (API/MCP/WORKER/SYSTEM) and call context
 
 ## Decision Authority
 
@@ -130,13 +132,41 @@ Every action produces an audit event with:
 - `application_id`
 - `timestamp`
 - `state` (workflow state at time of event)
-- `event_type` (17 types: STATE_TRANSITION, TOOL_EXECUTION, AI_RECOMMENDATION, etc.)
-- `actor` (always "SAKSHAM")
+- `event_type` (18 types: STATE_TRANSITION, TOOL_EXECUTION, AI_RECOMMENDATION, MCP_ACCESS, etc.)
+- `actor` (`"SAKSHAM"` for internal operations, `"MCP_CLIENT"` for MCP tool invocations)
 - `action` (tool or transition name)
 - `result` (SUCCESS, FAILURE, MISSING_DATA, etc.)
 - `metadata` (structured JSON with details)
 
 Events are immutable once written. If it wasn't logged, it didn't happen.
+
+## Provenance
+
+Every audit event carries provenance metadata via `app/audit/provenance.py`:
+
+- **Interface enum:** `API`, `MCP`, `WORKER`, `SYSTEM` — identifies how an operation was initiated
+- **ContextVar tracking:** Call-scoped `_call_interface` and `_call_tool` are set before each operation and stamped onto audit events automatically
+- **MCP_ACCESS events:** All 9 MCP tools record `MCP_ACCESS` audit events with `actor="MCP_CLIENT"`, ensuring external access is fully traceable
+
+## MCP Integration
+
+Saksham exposes a read-only MCP server via streamable-http, mounted at `/mcp`. The effective MCP client endpoint is `http://127.0.0.1:8000/mcp/mcp`. External agents (e.g., OpenClaw) can discover and invoke tools to inspect verification data without modifying workflow state.
+
+**9 read-only tools:**
+
+| Tool | Description |
+|------|-------------|
+| `get_application_status` | Full application status including state, risk, recommendation |
+| `list_applications` | Paginated list with optional state/risk/decision filters |
+| `get_application_documents` | All documents for an application with processing metadata |
+| `get_document` | Single document detail with extracted fields and confidence |
+| `get_document_raw_text` | Raw OCR text from a document |
+| `get_audit_history` | Full audit trail in chronological order |
+| `get_verification_summary` | Compact summary: state, decision, risk, missing fields |
+| `get_risk_assessment` | Risk level, score, factors, and recommendation |
+| `validate_application` | Dry-run validation without modifying state |
+
+All MCP tools are strictly inspection-only. No mutation operations exist. See `docs/OPENCLAW.md` for integration details.
 
 ## Example Workflow
 
@@ -179,11 +209,12 @@ The LLM has no direct access to workflow state, no ability to modify decisions, 
 - **No multi-document correlation:** Each document is processed independently
 - **No external API verification:** PAN/GST not verified against government databases
 - **No ML-based risk scoring:** Risk is additive, not predictive
-- **No authentication/authorization:** API is open (prototype)
+- **No authentication/authorization:** API and MCP are open (prototype)
 - **No horizontal scaling:** Single-process SQLite (not suitable for production)
 - **No document deduplication:** Same document can be uploaded multiple times
 - **No timezone handling:** All timestamps are UTC
 - **No webhook delivery:** Escalation webhook URL is configured but not yet implemented
+- **MCP is read-only:** No mutation tools; external agents cannot trigger workflow actions
 
 ## Future Improvements
 
@@ -195,6 +226,7 @@ The LLM has no direct access to workflow state, no ability to modify decisions, 
 - ML-based risk scoring
 - Document deduplication
 - Batch processing support
+- MCP mutation tools (approve/reject with auth)
 
 ## Technology Stack
 
@@ -206,6 +238,8 @@ The LLM has no direct access to workflow state, no ability to modify decisions, 
 | OCR | RapidOCR (ONNX-based) |
 | PDF | PyMuPDF (pymupdf) |
 | LLM | OpenRouter-compatible API (optional) |
+| MCP | Python MCP SDK (streamable-http) |
+| Frontend | React + TypeScript (Vite) |
 | Testing | pytest + pytest-asyncio |
 | Linting | ruff |
 | Package | pyproject.toml (setuptools) |
@@ -217,12 +251,16 @@ saksham/
 ├── app/
 │   ├── main.py                    # FastAPI app with lifespan
 │   ├── api/routes.py              # REST endpoints
-│   ├── audit/logger.py            # Audit event persistence
+│   ├── audit/
+│   │   ├── logger.py              # Audit event persistence
+│   │   └── provenance.py          # Interface enum, ContextVar, call context
 │   ├── config/settings.py         # Pydantic Settings
 │   ├── memory/
 │   │   ├── database.py            # SQLite connection + schema
 │   │   ├── store.py               # WorkflowMemory + DocumentStore
 │   │   └── errors.py              # PersistenceError, AuditPersistenceError
+│   ├── mcp/
+│   │   └── server.py              # MCP server (9 read-only tools)
 │   ├── models/
 │   │   ├── domain.py              # Domain dataclasses
 │   │   ├── schemas.py             # API request/response schemas
@@ -240,8 +278,11 @@ saksham/
 │   │   ├── extraction.py          # Extraction routing
 │   │   └── escalation.py          # Escalation logic
 │   └── worker/engine.py           # Core workflow engine
-├── tests/                         # 109 tests
+├── frontend/                      # React + TypeScript (Vite)
+├── tests/                         # 216 tests
 ├── data/                          # Runtime SQLite database
+├── docs/
+│   └── OPENCLAW.md                # OpenClaw/MCP integration guide
 ├── pyproject.toml
 ├── SOUL.md                        # System identity
 ├── AGENTS.md                      # Developer contract
@@ -343,12 +384,13 @@ curl http://localhost:8000/api/v1/applications/{app_id}/history
 | `SYSTEM.md` | System overview, inputs/outputs, autonomy model |
 | `EXAMPLES.md` | 11 input/output examples (REAL and ILLUSTRATIVE) |
 | `SUBMISSION_CHECKLIST.md` | Evaluator-oriented readiness checklist |
+| `docs/OPENCLAW.md` | OpenClaw/MCP integration guide and status |
 
 ## Test Status
 
-- **109 tests passing**
+- **216 tests passing**
 - **1 pre-existing third-party warning** (StarletteDeprecationWarning from FastAPI test client)
-- Coverage: engine, state machine, validation, comparison, risk, document processing, persistence, reliability, API, integration
+- Coverage: engine, state machine, validation, comparison, risk, document processing, persistence, reliability, API, integration, MCP, provenance
 
 ## License
 

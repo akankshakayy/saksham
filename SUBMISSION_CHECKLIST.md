@@ -39,7 +39,7 @@ Evaluator-oriented readiness checklist for the Eko AI Worker evaluation.
 
 ## Audit & Observability
 
-- [x] Audit trail documented (17 event types)
+- [x] Audit trail documented (18 event types)
 - [x] Every action produces audit event
 - [x] Events immutable once written
 - [x] Full history queryable per application
@@ -54,7 +54,7 @@ Evaluator-oriented readiness checklist for the Eko AI Worker evaluation.
 
 ## Repository Quality
 
-- [x] Tests passing (109 tests)
+- [x] Tests passing (216 tests)
 - [x] No secrets committed (only placeholders in .env.example)
 - [x] Dependencies declared (pyproject.toml)
 - [x] .gitignore configured (comprehensive)
@@ -72,7 +72,7 @@ Evaluator-oriented readiness checklist for the Eko AI Worker evaluation.
 
 ## Test Count
 
-**109 tests passing**
+**216 tests passing**
 
 ## Warning Count
 

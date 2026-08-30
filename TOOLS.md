@@ -858,12 +858,12 @@ What It Stores:
 - `timestamp` (ISO 8601)
 - `state` (WorkflowState)
 - `event_type` (EventType)
-- `actor` (default: "SAKSHAM")
+- `actor` (default: "SAKSHAM"; MCP callers use `MCP_CLIENT`)
 - `action` (tool or operation name)
 - `result` (SUCCESS, FAILED, etc.)
 - `metadata_json` (arbitrary JSON)
 
-Event Types (17):
+Event Types (18):
 | Event Type | When Recorded |
 |------------|---------------|
 | `INPUT_RECEIVED` | Application submitted |
@@ -883,6 +883,7 @@ Event Types (17):
 | `DOCUMENT_PROCESSING_FAILED` | Document processing fails |
 | `DOCUMENT_PROCESSING_REUSED` | Persisted result reused |
 | `DOCUMENT_LOW_CONFIDENCE` | Document below confidence threshold |
+| `MCP_ACCESS` | MCP tool invocation |
 
 Persistence Mechanism:
 SQLite. Events are inserted and committed immediately.

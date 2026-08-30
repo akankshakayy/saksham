@@ -420,7 +420,7 @@ Saksham's design reflects Eko's open-source-first, cost-conscious philosophy:
 | Workflow states | 15 | `WorkflowState` enum | Yes |
 | Final decisions | 4 (APPROVE, REJECT, ESCALATE, REQUEST_MORE) | `FinalDecision` enum | Yes |
 | Risk levels | 4 (LOW, MEDIUM, HIGH, CRITICAL) | `RiskLevel` enum | Yes |
-| Event types | 17 | `EventType` enum | Yes |
+| Event types | 18 | `EventType` enum | Yes |
 | Confidence formula | OCR×0.4 + Field×0.4 + Discovery×0.2 | `_calculate_overall_confidence()` | Yes |
 | Risk scoring | Additive (0.3×inconsistencies, 0.25×low_conf, 0.3×no_data, 0.15×no_pan_gst) | `assess_risk()` | Yes |
 | Policy: CRITICAL + APPROVE → ESCALATE | Yes | `_enforce_policy()` line 370-375 | Yes |
@@ -454,4 +454,4 @@ None. SYSTEM.md accurately reflects the current implementation.
 pytest tests/ -q
 ```
 
-Expected result: 95 passed, 1 third-party warning (StarletteDeprecationWarning).
+Expected result: 216 passed, 1 third-party warning (StarletteDeprecationWarning).

@@ -1190,7 +1190,7 @@ Potential improvements for future versions. None are currently implemented.
 | Policy override: REJECT + non-CRITICAL | ESCALATE_TO_HUMAN | `engine.py:392-397` | Yes |
 | Retry loop: range(max_retries) | 3 attempts (0, 1, 2) | `engine.py:219` | Yes |
 | Persisted reuse criteria | status=completed + confidence >= 0.6 | `engine.py:127-143` | Yes |
-| Event types | 17 | 17 (`EventType` enum) | Yes |
+| Event types | 18 | 18 (`EventType` enum) | Yes |
 | Confidence formula | OCR×0.4 + Field×0.4 + Discovery×0.2 | `document_processing.py:397-423` | Yes |
 | LLM fallback: no API key | rule-based | `llm_analysis.py:55-57` | Yes |
 | LLM fallback: malformed JSON | ESCALATE, confidence 0.3 | `llm_analysis.py:122-130` | Yes |

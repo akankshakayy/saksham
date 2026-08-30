@@ -11,10 +11,15 @@ from app.memory.database import close_database, init_database
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup, close on shutdown."""
+    """Initialize database and MCP session manager on startup."""
     settings = get_settings()
     await init_database(settings.database_url)
-    yield
+
+    mcp_server = app.state.mcp_server
+    session_manager = mcp_server._lowlevel_server._session_manager
+    async with session_manager.run():
+        yield
+
     await close_database()
 
 
@@ -39,6 +44,7 @@ def create_app() -> FastAPI:
     app.include_router(router, prefix="/api/v1")
 
     mcp_server = create_mcp_server()
+    app.state.mcp_server = mcp_server
     app.mount("/mcp", mcp_server.streamable_http_app())
 
     return app
