@@ -36,8 +36,33 @@ async def _submit_app(client: AsyncClient, **overrides) -> str:
     }
     payload.update(overrides)
     resp = await client.post("/api/v1/applications", json=payload)
-    assert resp.status_code == 200
+    assert resp.status_code == 202
     return resp.json()["application_id"]
+
+
+async def _submit_and_process(client: AsyncClient, **overrides) -> str:
+    """Submit an application, then run the workflow engine synchronously.
+
+    Returns the application_id after the workflow has completed,
+    so tests can assert on terminal states without relying on
+    background task execution.
+    """
+    from app.audit.logger import AuditLogger
+    from app.memory.database import get_database
+    from app.memory.store import WorkflowMemory
+    from app.worker.engine import WorkerEngine
+
+    app_id = await _submit_app(client, **overrides)
+
+    db = get_database()
+    memory = WorkflowMemory(db=db)
+    audit = AuditLogger(db=db)
+    engine = WorkerEngine(memory=memory, audit=audit)
+
+    context = await memory.get(app_id)
+    assert context is not None, f"No persisted context for {app_id}"
+    await engine.resume_application(context)
+    return app_id
 
 
 # ============================================================
@@ -331,7 +356,7 @@ class TestEnrichedStatus:
         async with AsyncClient(
             transport=transport, base_url="http://test", headers=AUTH_HEADERS
         ) as client:
-            app_id = await _submit_app(
+            app_id = await _submit_and_process(
                 client,
                 applicant_name=None,
                 business_name=None,
@@ -356,7 +381,7 @@ class TestEnrichedStatus:
         async with AsyncClient(
             transport=transport, base_url="http://test", headers=AUTH_HEADERS
         ) as client:
-            app_id = await _submit_app(
+            app_id = await _submit_and_process(
                 client,
                 applicant_name="Escalate Test",
                 business_name="Escalate Biz",
@@ -406,22 +431,14 @@ class TestDocumentEndpoints:
                     files={"file": ("pan_card.png", f, "image/png")},
                     data={"document_type": "pan_card"},
                 )
-            assert resp.status_code == 200
+            assert resp.status_code == 202
             data = resp.json()
             assert "document_id" in data
             assert data["application_id"] == app_id
             assert data["document_type"] == "pan_card"
             assert data["original_filename"] == "pan_card.png"
             assert "processing_status" in data
-            assert "overall_confidence" in data
-            assert "ocr_confidence" in data
-            assert "field_extraction_confidence" in data
-            assert "extracted_fields" in data
-            assert "processing_method" in data
-            assert "error_code" in data
-            assert "error_message" in data
-            assert "stored_path" not in data
-            assert "raw_text" not in data
+            assert data["processing_status"] == "processing"
 
     @pytest.mark.asyncio
     async def test_upload_nonexistent_application_returns_404(self):

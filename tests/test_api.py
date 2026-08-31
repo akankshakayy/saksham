@@ -31,17 +31,11 @@ async def test_submit_application():
                 "email": "john@example.com",
             },
         )
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
     assert "application_id" in data
     assert "state" in data
-    assert data["state"] in [
-        "APPROVED",
-        "ESCALATED",
-        "ESCALATED_TO_HUMAN",
-        "MORE_INFORMATION_REQUIRED",
-        "REJECTED",
-    ]
+    assert data["state"] == "RECEIVED"
 
 
 @pytest.mark.asyncio
@@ -57,9 +51,9 @@ async def test_submit_missing_fields():
                 "phone": None,
             },
         )
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
-    assert data["state"] == "MORE_INFORMATION_REQUIRED"
+    assert data["state"] == "RECEIVED"
 
 
 @pytest.mark.asyncio
@@ -98,8 +92,9 @@ async def test_full_workflow():
                 "email": "test@example.com",
             },
         )
-        assert submit_response.status_code == 200
+        assert submit_response.status_code == 202
         app_id = submit_response.json()["application_id"]
+        assert submit_response.json()["state"] == "RECEIVED"
 
         status_response = await client.get(f"/api/v1/applications/{app_id}")
         assert status_response.status_code == 200

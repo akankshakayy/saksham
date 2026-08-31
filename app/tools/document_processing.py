@@ -9,7 +9,7 @@ import logging
 import os
 import shutil
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -117,7 +117,9 @@ def validate_file(
         return FileValidationResult(
             valid=False,
             error_code="UNSUPPORTED_MIME_TYPE",
-            error_message=f"MIME type '{content_type}' is not supported. Allowed: {ALLOWED_MIME_TYPES}",
+            error_message=(
+                f"MIME type '{content_type}' is not supported. Allowed: {ALLOWED_MIME_TYPES}"
+            ),
             detected_mime=content_type,
             file_size=file_size,
         )

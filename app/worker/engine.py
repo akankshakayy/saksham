@@ -54,13 +54,24 @@ class WorkerEngine:
             context, EventType.INPUT_RECEIVED, "submit_application", "SUCCESS"
         )
 
-        context = await self._validate(context)
-        if context.current_state in (
-            WorkflowState.MISSING_INFORMATION,
-            WorkflowState.MORE_INFORMATION_REQUIRED,
-            WorkflowState.FAILED,
-        ):
-            return context
+        return await self.resume_application(context)
+
+    async def resume_application(
+        self, context: WorkflowContext
+    ) -> WorkflowContext:
+        """Resume processing an existing application from its current state.
+
+        Used by background workers to continue processing after the initial
+        HTTP request has returned 202 Accepted.
+        """
+        if context.current_state == WorkflowState.RECEIVED:
+            context = await self._validate(context)
+            if context.current_state in (
+                WorkflowState.MISSING_INFORMATION,
+                WorkflowState.MORE_INFORMATION_REQUIRED,
+                WorkflowState.FAILED,
+            ):
+                return context
 
         context = await self._verify_documents(context)
         if context.current_state in (
@@ -194,6 +205,7 @@ class WorkerEngine:
     def _build_extracted_data_from_persisted(self, doc, persisted):
         """Build ExtractedDocumentData from a persisted document record."""
         import json
+
         from app.models.domain import ExtractedDocumentData
 
         fields_json = persisted.get("extracted_fields_json", "{}")

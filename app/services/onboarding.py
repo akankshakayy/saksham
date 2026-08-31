@@ -37,7 +37,11 @@ class OnboardingService:
     async def submit_application(
         self, request: SubmitApplicationRequest
     ) -> SubmitApplicationResponse:
-        """Submit a new onboarding application for processing."""
+        """Submit a new onboarding application for background processing.
+
+        Persists the application in RECEIVED state and returns immediately.
+        The full workflow runs in the background.
+        """
         documents = [
             ApplicationDocument(
                 document_type=doc.document_type,
@@ -61,12 +65,24 @@ class OnboardingService:
             metadata=request.metadata,
         )
 
-        context = await self.engine.process_application(application)
+        from app.models.domain import WorkflowContext
+        from app.models.states import EventType, WorkflowState
+
+        context = WorkflowContext(application=application)
+        await self.memory.save(context)
+
+        await self.audit.record(
+            application_id=application.application_id,
+            state=WorkflowState.RECEIVED,
+            event_type=EventType.INPUT_RECEIVED,
+            action="submit_application",
+            result="ACCEPTED",
+        )
 
         return SubmitApplicationResponse(
             application_id=application.application_id,
             state=context.current_state,
-            message=f"Application processed. Current state: {context.current_state.value}",
+            message=f"Application accepted. Current state: {context.current_state.value}",
         )
 
     async def get_status(self, application_id: str) -> ApplicationStatusResponse | None:

@@ -336,6 +336,96 @@ class DocumentStore:
         )
         await db.conn.commit()
 
+    async def save_pending_document(
+        self,
+        document_id: str,
+        application_id: str,
+        document_type: str,
+        original_filename: str,
+        stored_path: str,
+    ) -> None:
+        """Persist a document in 'pending' status before background processing."""
+        db = self._get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        await db.conn.execute(
+            """INSERT INTO documents
+            (document_id, application_id, document_type, original_filename,
+             stored_path, processing_status, raw_text, raw_text_available,
+             ocr_confidence, field_extraction_confidence, overall_confidence,
+             extracted_fields_json, processing_method, error_code, error_message,
+             attempt_count, created_at, processed_at)
+             VALUES (?, ?, ?, ?, ?, 'pending', '', 0, 0.0, 0.0,
+                     0.0, '{}', '', NULL, NULL, 1, ?, ?)""",
+            (document_id, application_id, document_type, original_filename, stored_path, now, now),
+        )
+        await db.conn.commit()
+
+    async def update_document_status(
+        self,
+        document_id: str,
+        processing_status: str,
+        *,
+        raw_text: str = "",
+        raw_text_available: bool = False,
+        ocr_confidence: float = 0.0,
+        field_extraction_confidence: float = 0.0,
+        overall_confidence: float = 0.0,
+        extracted_fields: dict[str, Any] | None = None,
+        processing_method: str = "",
+        error_code: str | None = None,
+        error_message: str | None = None,
+        attempt_count: int | None = None,
+    ) -> None:
+        """Update a document record's processing status and results."""
+        db = self._get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        fields_json = json.dumps(extracted_fields) if extracted_fields is not None else None
+
+        updates = ["processing_status = ?", "processed_at = ?"]
+        params: list[Any] = [processing_status, now]
+
+        if raw_text:
+            updates.append("raw_text = ?")
+            params.append(raw_text)
+        updates.append("raw_text_available = ?")
+        params.append(1 if raw_text_available else 0)
+        updates.append("ocr_confidence = ?")
+        params.append(ocr_confidence)
+        updates.append("field_extraction_confidence = ?")
+        params.append(field_extraction_confidence)
+        updates.append("overall_confidence = ?")
+        params.append(overall_confidence)
+        if fields_json is not None:
+            updates.append("extracted_fields_json = ?")
+            params.append(fields_json)
+        if processing_method:
+            updates.append("processing_method = ?")
+            params.append(processing_method)
+        if error_code is not None:
+            updates.append("error_code = ?")
+            params.append(error_code)
+        if error_message is not None:
+            updates.append("error_message = ?")
+            params.append(error_message)
+        if attempt_count is not None:
+            updates.append("attempt_count = ?")
+            params.append(attempt_count)
+
+        params.append(document_id)
+        sql = f"UPDATE documents SET {', '.join(updates)} WHERE document_id = ?"
+        await db.conn.execute(sql, params)
+        await db.conn.commit()
+
+    async def get_documents_by_status(self, status: str) -> list[dict[str, Any]]:
+        """Retrieve all document records with a given processing status."""
+        db = self._get_db()
+        cursor = await db.conn.execute(
+            "SELECT * FROM documents WHERE processing_status = ? ORDER BY created_at",
+            (status,),
+        )
+        rows = await cursor.fetchall()
+        return [self._row_to_dict(row) for row in rows]
+
     @staticmethod
     def _row_to_dict(row: Any) -> dict[str, Any]:
         """Convert a database row to a document dict."""

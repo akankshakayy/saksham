@@ -136,42 +136,67 @@ class TestRealAPIUpload:
 
     @pytest.mark.asyncio
     async def test_upload_real_png(self, db):
-        from fastapi.testclient import TestClient
+        from httpx import ASGITransport, AsyncClient
         from app.main import app
 
-        client = TestClient(app, headers={"X-API-Key": "test-secret-key-12345"})
+        AUTH_HEADERS = {"X-API-Key": "test-secret-key-12345"}
+        transport = ASGITransport(app=app)
 
-        app_data = {
-            "applicant_name": "Test Merchant",
-            "business_name": "Test Business Corp",
-            "pan_number": "ABCDE1234F",
-            "phone": "9876543210",
-            "email": "test@business.com",
-        }
-        response = client.post("/api/v1/applications", json=app_data)
-        assert response.status_code == 200
-        app_id = response.json()["application_id"]
+        async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
+            app_data = {
+                "applicant_name": "Test Merchant",
+                "business_name": "Test Business Corp",
+                "pan_number": "ABCDE1234F",
+                "phone": "9876543210",
+                "email": "test@business.com",
+            }
+            response = await client.post("/api/v1/applications", json=app_data)
+            assert response.status_code == 202
+            app_id = response.json()["application_id"]
 
-        pan_path = os.path.join(FIXTURES_DIR, "synthetic_pan_card.png")
-        if not os.path.exists(pan_path):
-            pytest.skip("Synthetic PAN card fixture not found")
+            pan_path = os.path.join(FIXTURES_DIR, "synthetic_pan_card.png")
+            if not os.path.exists(pan_path):
+                pytest.skip("Synthetic PAN card fixture not found")
 
-        with open(pan_path, "rb") as f:
-            upload_response = client.post(
-                f"/api/v1/applications/{app_id}/documents",
-                files={"file": ("pan_card.png", f, "image/png")},
-                data={"document_type": "pan_card"},
-            )
+            with open(pan_path, "rb") as f:
+                upload_response = await client.post(
+                    f"/api/v1/applications/{app_id}/documents",
+                    files={"file": ("pan_card.png", f, "image/png")},
+                    data={"document_type": "pan_card"},
+                )
 
-        assert upload_response.status_code == 200
+        assert upload_response.status_code == 202
         data = upload_response.json()
-        assert data["processing_status"] in ("completed", "low_confidence")
-        assert data["overall_confidence"] > 0.0
-        assert data["ocr_confidence"] > 0.0
-        assert data["processing_method"] == "rapidocr"
-        assert data["extracted_fields"]["pan_number"]["value"] == "ABCDE1234F"
+        assert data["processing_status"] == "processing"
+        document_id = data["document_id"]
+
+        from app.tools.document_processing import process_document_file
+        from app.config.settings import get_settings
+        settings = get_settings()
+        result = process_document_file(
+            file_path=pan_path,
+            document_type="pan_card",
+            application_id=app_id,
+            document_id=document_id,
+            original_filename="pan_card.png",
+            max_pdf_pages=settings.max_pdf_pages,
+        )
+        assert result.ocr_confidence > 0.0
+        assert result.processing_method == "rapidocr"
+        assert result.extracted_fields["pan_number"]["value"] == "ABCDE1234F"
 
         doc_store = DocumentStore(db=db)
+        await doc_store.update_document_status(
+            document_id,
+            result.processing_status,
+            raw_text=result.raw_text,
+            raw_text_available=result.raw_text_available,
+            ocr_confidence=result.ocr_confidence,
+            field_extraction_confidence=result.field_extraction_confidence,
+            overall_confidence=result.overall_confidence,
+            extracted_fields=result.extracted_fields,
+            processing_method=result.processing_method,
+        )
         docs = await doc_store.get_documents_for_application(app_id)
         assert len(docs) == 1
         assert docs[0]["processing_status"] in ("completed", "low_confidence")

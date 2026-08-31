@@ -2,23 +2,28 @@
 
 RapidOCR is a lightweight OCR engine that works without GPU
 and without requiring system-level tesseract installation.
+
+Thread safety: Uses thread-local storage so each thread gets its own
+RapidOCR instance. This is necessary because RapidOCR mutates internal
+state during __call__ and is not thread-safe as a shared singleton.
 """
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-_ocr_engine = None
+_thread_local = threading.local()
 
 
 def _get_engine():
-    global _ocr_engine
-    if _ocr_engine is None:
+    """Get a thread-local RapidOCR instance for thread safety."""
+    if not hasattr(_thread_local, "engine"):
         from rapidocr_onnxruntime import RapidOCR
-        _ocr_engine = RapidOCR()
-    return _ocr_engine
+        _thread_local.engine = RapidOCR()
+    return _thread_local.engine
 
 
 @dataclass

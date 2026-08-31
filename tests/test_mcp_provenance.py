@@ -51,7 +51,7 @@ async def _create_application(client: AsyncClient) -> str:
             "email": "prov@example.com",
         },
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 202
     return resp.json()["application_id"]
 
 
