@@ -139,7 +139,7 @@ class TestRealAPIUpload:
         from fastapi.testclient import TestClient
         from app.main import app
 
-        client = TestClient(app)
+        client = TestClient(app, headers={"X-API-Key": "test-secret-key-12345"})
 
         app_data = {
             "applicant_name": "Test Merchant",

@@ -16,7 +16,9 @@ class Settings(BaseSettings):
 
     app_name: str = "Saksham"
     app_env: str = "development"
-    debug: bool = True
+    debug: bool = False
+
+    api_keys_raw: str = ""
 
     database_url: str = "sqlite+aiosqlite:///./saksham.db"
 
@@ -53,6 +55,16 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:5173",
     ]
+
+    cors_methods: list[str] = ["GET", "POST", "OPTIONS"]
+    cors_headers: list[str] = ["Content-Type", "X-API-Key"]
+
+    @property
+    def api_keys(self) -> list[str]:
+        """Parse comma-separated API_KEYS into a list."""
+        if not self.api_keys_raw:
+            return []
+        return [k.strip() for k in self.api_keys_raw.split(",") if k.strip()]
 
 
 @lru_cache

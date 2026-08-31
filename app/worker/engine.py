@@ -292,20 +292,21 @@ class WorkerEngine:
                 await self._transition(context, WorkflowState.VERIFYING)
 
             except Exception as e:
+                error_msg = str(e)[:200]
                 context.retry_count += 1
                 await self._record_event(
                     context,
                     EventType.DOCUMENT_PROCESSING_FAILED,
                     "extract_document_data",
                     "ERROR",
-                    {"error": str(e), "attempt": attempt + 1},
+                    {"error": error_msg, "attempt": attempt + 1},
                 )
                 await self._record_event(
                     context,
                     EventType.FAILURE,
                     "extract_document_data",
                     "ERROR",
-                    {"error": str(e), "attempt": attempt + 1},
+                    {"error": error_msg, "attempt": attempt + 1},
                 )
                 if attempt < max_retries - 1:
                     await self._transition(context, WorkflowState.TOOL_RETRYING)

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
+from app.auth import CallerIdentity, require_api_key, validate_uuid
 from app.memory.errors import PersistenceError
 from app.models.schemas import (
     ApplicationStatusResponse,
@@ -54,6 +55,7 @@ async def health_check() -> HealthResponse:
 @router.post("/applications", response_model=SubmitApplicationResponse)
 async def submit_application(
     request: SubmitApplicationRequest,
+    _caller: CallerIdentity = Depends(require_api_key),
 ) -> SubmitApplicationResponse:
     """Submit a new onboarding application for processing."""
     service = get_service()
@@ -78,15 +80,17 @@ async def submit_application(
 )
 async def get_application_status(
     application_id: str,
+    _caller: CallerIdentity = Depends(require_api_key),
 ) -> ApplicationStatusResponse:
     """Get current status of an application."""
+    application_id = validate_uuid(application_id)
     service = get_service()
     status = await service.get_status(application_id)
     if not status:
         return _error_response(
             404,
             "APPLICATION_NOT_FOUND",
-            f"Application with id '{application_id}' not found",
+            "Application not found",
         )
     return status
 
@@ -97,15 +101,17 @@ async def get_application_status(
 )
 async def get_application_history(
     application_id: str,
+    _caller: CallerIdentity = Depends(require_api_key),
 ) -> WorkflowHistoryResponse:
     """Get full audit history for an application."""
+    application_id = validate_uuid(application_id)
     service = get_service()
     history = await service.get_history(application_id)
     if not history:
         return _error_response(
             404,
             "APPLICATION_NOT_FOUND",
-            f"Application with id '{application_id}' not found",
+            "Application not found",
         )
     return history
 
@@ -118,6 +124,7 @@ async def list_applications(
     q: str | None = Query(None, description="Search by name or application ID"),
     limit: int = Query(20, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
+    _caller: CallerIdentity = Depends(require_api_key),
 ) -> ListApplicationsResponse:
     """List applications with pagination and filtering."""
     valid_states = {s.value for s in WorkflowStateEnum}
@@ -172,14 +179,16 @@ async def list_applications(
 )
 async def list_documents(
     application_id: str,
+    _caller: CallerIdentity = Depends(require_api_key),
 ) -> list[DocumentSummaryResponse]:
     """List all documents for an application."""
+    application_id = validate_uuid(application_id)
     service = get_service()
     if not await service.application_exists(application_id):
         return _error_response(
             404,
             "APPLICATION_NOT_FOUND",
-            f"Application with id '{application_id}' not found",
+            "Application not found",
         )
     return await service.get_documents(application_id)
 
@@ -191,21 +200,23 @@ async def list_documents(
 async def get_document(
     application_id: str,
     document_id: str,
+    _caller: CallerIdentity = Depends(require_api_key),
 ) -> DocumentDetailResponse:
     """Get detailed information for a single document."""
+    application_id = validate_uuid(application_id)
     service = get_service()
     if not await service.application_exists(application_id):
         return _error_response(
             404,
             "APPLICATION_NOT_FOUND",
-            f"Application with id '{application_id}' not found",
+            "Application not found",
         )
     doc = await service.get_document(application_id, document_id)
     if not doc:
         return _error_response(
             404,
             "DOCUMENT_NOT_FOUND",
-            f"Document with id '{document_id}' not found",
+            "Document not found",
         )
     return doc
 
@@ -217,21 +228,23 @@ async def get_document(
 async def get_document_raw_text(
     application_id: str,
     document_id: str,
+    _caller: CallerIdentity = Depends(require_api_key),
 ) -> RawTextResponse:
     """Get raw OCR text for a document."""
+    application_id = validate_uuid(application_id)
     service = get_service()
     if not await service.application_exists(application_id):
         return _error_response(
             404,
             "APPLICATION_NOT_FOUND",
-            f"Application with id '{application_id}' not found",
+            "Application not found",
         )
     raw = await service.get_raw_text(application_id, document_id)
     if not raw:
         return _error_response(
             404,
             "DOCUMENT_NOT_FOUND",
-            f"Document with id '{document_id}' not found",
+            "Document not found",
         )
     return raw
 
@@ -244,14 +257,16 @@ async def upload_document(
     application_id: str,
     file: UploadFile = File(...),
     document_type: str = Form(...),
+    _caller: CallerIdentity = Depends(require_api_key),
 ) -> DocumentUploadResponse:
     """Upload and process a document for an application."""
+    application_id = validate_uuid(application_id)
     service = get_service()
     if not await service.application_exists(application_id):
         return _error_response(
             404,
             "APPLICATION_NOT_FOUND",
-            f"Application with id '{application_id}' not found",
+            "Application not found",
         )
 
     from app.config.settings import get_settings

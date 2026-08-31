@@ -11,6 +11,8 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.mcp import create_mcp_server
 
+AUTH_HEADERS = {"X-API-Key": "test-secret-key-12345"}
+
 
 @pytest.fixture(scope="module")
 def mcp_server():
@@ -36,7 +38,7 @@ async def _create_application(client: AsyncClient) -> str:
 @pytest.mark.asyncio
 async def test_get_application_status(mcp_server):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         app_id = await _create_application(client)
 
     result = await mcp_server.call_tool("get_application_status", {"application_id": app_id})
@@ -65,7 +67,7 @@ async def test_get_application_status_not_found(mcp_server):
 @pytest.mark.asyncio
 async def test_list_applications(mcp_server):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await _create_application(client)
 
     result = await mcp_server.call_tool("list_applications", {})
@@ -94,7 +96,7 @@ async def test_list_applications_with_state_filter(mcp_server):
 @pytest.mark.asyncio
 async def test_get_application_documents(mcp_server):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         app_id = await _create_application(client)
 
     result = await mcp_server.call_tool(
@@ -145,7 +147,7 @@ async def test_get_document_raw_text_not_found(mcp_server):
 @pytest.mark.asyncio
 async def test_get_audit_history(mcp_server):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         app_id = await _create_application(client)
 
     result = await mcp_server.call_tool(
@@ -174,7 +176,7 @@ async def test_get_audit_history_not_found(mcp_server):
 @pytest.mark.asyncio
 async def test_get_verification_summary(mcp_server):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         app_id = await _create_application(client)
 
     result = await mcp_server.call_tool(
@@ -205,7 +207,7 @@ async def test_get_verification_summary_not_found(mcp_server):
 @pytest.mark.asyncio
 async def test_get_risk_assessment(mcp_server):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         app_id = await _create_application(client)
 
     result = await mcp_server.call_tool(
@@ -234,7 +236,7 @@ async def test_get_risk_assessment_not_found(mcp_server):
 @pytest.mark.asyncio
 async def test_validate_application(mcp_server):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         app_id = await _create_application(client)
 
     result = await mcp_server.call_tool(

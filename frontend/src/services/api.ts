@@ -14,6 +14,7 @@ import type {
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 const API_PREFIX = "/api/v1";
+const API_KEY = import.meta.env.VITE_API_KEY || "";
 
 export class ApiError extends Error {
   status: number;
@@ -32,6 +33,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
   };
+
+  if (API_KEY) {
+    headers["X-API-Key"] = API_KEY;
+  }
 
   if (options.body && typeof options.body === "string") {
     headers["Content-Type"] = "application/json";
@@ -139,6 +144,7 @@ export async function uploadDocument(
 
   const response = await fetch(url, {
     method: "POST",
+    headers: API_KEY ? { "X-API-Key": API_KEY } : undefined,
     body: formData,
   });
 

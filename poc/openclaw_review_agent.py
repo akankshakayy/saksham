@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from typing import Any
 
@@ -21,6 +22,7 @@ import httpx
 
 MCP_URL = "http://127.0.0.1:8000/mcp/mcp"
 TIMEOUT = 30
+API_KEY = os.environ.get("SAKSHAM_API_KEY", "")
 
 
 async def mcp_call(
@@ -35,6 +37,8 @@ async def mcp_call(
         "Accept": "application/json, text/event-stream",
         "Mcp-Session-Id": session_id,
     }
+    if API_KEY:
+        headers["X-API-Key"] = API_KEY
     payload = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -57,6 +61,8 @@ async def initialize_mcp(client: httpx.AsyncClient) -> str:
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
     }
+    if API_KEY:
+        headers["X-API-Key"] = API_KEY
     payload = {
         "jsonrpc": "2.0",
         "id": 1,

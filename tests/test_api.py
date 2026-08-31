@@ -3,11 +3,13 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
+AUTH_HEADERS = {"X-API-Key": "test-secret-key-12345"}
+
 
 @pytest.mark.asyncio
 async def test_health_check():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         response = await client.get("/api/v1/health")
     assert response.status_code == 200
     data = response.json()
@@ -18,7 +20,7 @@ async def test_health_check():
 @pytest.mark.asyncio
 async def test_submit_application():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         response = await client.post(
             "/api/v1/applications",
             json={
@@ -45,7 +47,7 @@ async def test_submit_application():
 @pytest.mark.asyncio
 async def test_submit_missing_fields():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         response = await client.post(
             "/api/v1/applications",
             json={
@@ -63,15 +65,15 @@ async def test_submit_missing_fields():
 @pytest.mark.asyncio
 async def test_get_status_not_found():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/api/v1/applications/nonexistent")
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
+        response = await client.get("/api/v1/applications/00000000-0000-0000-0000-000000000000")
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_list_applications():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         response = await client.get("/api/v1/applications")
     assert response.status_code == 200
     data = response.json()
@@ -85,7 +87,7 @@ async def test_list_applications():
 @pytest.mark.asyncio
 async def test_full_workflow():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         submit_response = await client.post(
             "/api/v1/applications",
             json={
@@ -114,7 +116,7 @@ async def test_full_workflow():
 @pytest.mark.asyncio
 async def test_list_summary_includes_applicant_fields():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -137,7 +139,7 @@ async def test_list_summary_includes_applicant_fields():
 @pytest.mark.asyncio
 async def test_list_summary_has_all_expected_fields():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -169,7 +171,7 @@ async def test_list_summary_has_all_expected_fields():
 @pytest.mark.asyncio
 async def test_search_by_applicant_name():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -189,7 +191,7 @@ async def test_search_by_applicant_name():
 @pytest.mark.asyncio
 async def test_search_by_business_name():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -209,7 +211,7 @@ async def test_search_by_business_name():
 @pytest.mark.asyncio
 async def test_search_by_application_id():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         resp = await client.post(
             "/api/v1/applications",
             json={
@@ -230,7 +232,7 @@ async def test_search_by_application_id():
 @pytest.mark.asyncio
 async def test_search_case_insensitive():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -248,7 +250,7 @@ async def test_search_case_insensitive():
 @pytest.mark.asyncio
 async def test_search_partial_match():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -266,7 +268,7 @@ async def test_search_partial_match():
 @pytest.mark.asyncio
 async def test_search_empty_q_returns_all():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         resp1 = await client.get("/api/v1/applications")
         resp2 = await client.get("/api/v1/applications", params={"q": ""})
     assert resp1.json()["total"] == resp2.json()["total"]
@@ -275,7 +277,7 @@ async def test_search_empty_q_returns_all():
 @pytest.mark.asyncio
 async def test_search_no_results():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         response = await client.get(
             "/api/v1/applications",
             params={"q": "ZZZNonExistent99999"},
@@ -288,7 +290,7 @@ async def test_search_no_results():
 @pytest.mark.asyncio
 async def test_search_with_state_filter():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -310,7 +312,7 @@ async def test_search_with_state_filter():
 @pytest.mark.asyncio
 async def test_search_with_risk_filter():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -332,7 +334,7 @@ async def test_search_with_risk_filter():
 @pytest.mark.asyncio
 async def test_search_with_decision_filter():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         await client.post(
             "/api/v1/applications",
             json={
@@ -354,7 +356,7 @@ async def test_search_with_decision_filter():
 @pytest.mark.asyncio
 async def test_search_with_pagination():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         for i in range(5):
             await client.post(
                 "/api/v1/applications",
@@ -387,7 +389,7 @@ async def test_search_with_pagination():
 @pytest.mark.asyncio
 async def test_list_ordering_newest_first():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=AUTH_HEADERS) as client:
         r1 = await client.post(
             "/api/v1/applications",
             json={

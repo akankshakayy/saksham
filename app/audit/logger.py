@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +13,34 @@ from app.models.domain import AuditEvent
 from app.models.states import EventType, WorkflowState
 
 logger = logging.getLogger(__name__)
+
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_MAX_META_STR_LEN = 500
+
+
+def sanitize_metadata_value(value: Any) -> Any:
+    """Sanitize a value before storing in audit metadata.
+
+    Strips control characters, truncates excessive strings,
+    and avoids leaking raw document content.
+    """
+    if isinstance(value, str):
+        sanitized = _CONTROL_RE.sub("", value)
+        if len(sanitized) > _MAX_META_STR_LEN:
+            sanitized = sanitized[:_MAX_META_STR_LEN] + "...[truncated]"
+        return sanitized
+    if isinstance(value, dict):
+        return {k: sanitize_metadata_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [sanitize_metadata_value(item) for item in value]
+    return value
+
+
+def sanitize_audit_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    """Sanitize an entire metadata dict for audit storage."""
+    if not metadata:
+        return {}
+    return {k: sanitize_metadata_value(v) for k, v in metadata.items()}
 
 
 class AuditLogger:
@@ -45,7 +74,7 @@ class AuditLogger:
         whether to continue. The event object is still returned so the caller
         knows what was attempted.
         """
-        merged_metadata = dict(metadata) if metadata else {}
+        merged_metadata = sanitize_audit_metadata(metadata)
 
         interface, tool_name = get_call_context()
         if interface is not None:

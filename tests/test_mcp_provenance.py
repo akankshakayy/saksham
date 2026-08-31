@@ -21,6 +21,8 @@ from app.models.domain import OnboardingApplication
 from app.models.states import EventType, WorkflowState
 from app.worker.engine import WorkerEngine
 
+AUTH_HEADERS = {"X-API-Key": "test-secret-key-12345"}
+
 
 @pytest.fixture(scope="module")
 def mcp_server():
@@ -60,7 +62,9 @@ async def _create_application(client: AsyncClient) -> str:
 async def test_mcp_tool_records_mcp_provenance(mcp_server):
     """MCP tool call should produce an audit event with interface=MCP."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=AUTH_HEADERS
+    ) as client:
         app_id = await _create_application(client)
 
     # Invoke an MCP tool
@@ -106,7 +110,9 @@ async def test_mcp_tool_records_mcp_provenance(mcp_server):
 async def test_each_mcp_tool_records_its_name(mcp_server, tool_name):
     """Each MCP tool should record its own name in audit metadata."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=AUTH_HEADERS
+    ) as client:
         app_id = await _create_application(client)
 
     # Build args for the tool
@@ -144,7 +150,9 @@ async def test_each_mcp_tool_records_its_name(mcp_server, tool_name):
 async def test_mcp_provenance_event_includes_application_id(mcp_server):
     """MCP access events should include the application_id."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=AUTH_HEADERS
+    ) as client:
         app_id = await _create_application(client)
 
     await mcp_server.call_tool("get_application_status", {"application_id": app_id})
@@ -194,7 +202,9 @@ async def test_normal_operations_no_mcp_provenance(db):
 async def test_mcp_client_not_labeled_openclaw(mcp_server):
     """Generic MCP client must not be mislabeled as OPENCLAW."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=AUTH_HEADERS
+    ) as client:
         app_id = await _create_application(client)
 
     await mcp_server.call_tool("get_application_status", {"application_id": app_id})
@@ -215,7 +225,9 @@ async def test_mcp_client_not_labeled_openclaw(mcp_server):
 async def test_no_secrets_in_audit_metadata(mcp_server):
     """Audit metadata must not contain API keys, tokens, or secrets."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=AUTH_HEADERS
+    ) as client:
         app_id = await _create_application(client)
 
     await mcp_server.call_tool("get_application_status", {"application_id": app_id})
@@ -236,7 +248,9 @@ async def test_no_secrets_in_audit_metadata(mcp_server):
 async def test_mcp_events_maintain_chronological_order(mcp_server):
     """MCP-provenance events should maintain chronological ordering."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=AUTH_HEADERS
+    ) as client:
         app_id = await _create_application(client)
 
     # Call multiple MCP tools
@@ -259,7 +273,9 @@ async def test_mcp_events_maintain_chronological_order(mcp_server):
 async def test_all_mcp_tools_still_work(mcp_server):
     """Smoke test: all 9 MCP tools should return valid responses."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=AUTH_HEADERS
+    ) as client:
         app_id = await _create_application(client)
 
     tools_and_args = [
@@ -416,7 +432,9 @@ async def test_call_context_isolation():
 async def test_mcp_access_event_metadata_structure(mcp_server):
     """MCP access events should have correct metadata structure."""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers=AUTH_HEADERS
+    ) as client:
         app_id = await _create_application(client)
 
     await mcp_server.call_tool("get_application_status", {"application_id": app_id})

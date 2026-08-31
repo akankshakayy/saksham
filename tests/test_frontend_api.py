@@ -13,6 +13,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
+AUTH_HEADERS = {"X-API-Key": "test-secret-key-12345"}
+
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
@@ -47,7 +49,9 @@ class TestCORS:
     @pytest.mark.asyncio
     async def test_cors_preflight_allowed_origin(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             response = await client.options(
                 "/api/v1/health",
                 headers={
@@ -62,7 +66,9 @@ class TestCORS:
     @pytest.mark.asyncio
     async def test_cors_preflight_vite_origin(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             response = await client.options(
                 "/api/v1/health",
                 headers={
@@ -76,7 +82,9 @@ class TestCORS:
     @pytest.mark.asyncio
     async def test_cors_get_includes_origin_header(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             response = await client.get(
                 "/api/v1/health",
                 headers={"Origin": "http://localhost:3000"},
@@ -94,7 +102,9 @@ class TestListApplications:
     @pytest.mark.asyncio
     async def test_empty_list(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             response = await client.get("/api/v1/applications")
         assert response.status_code == 200
         data = response.json()
@@ -106,7 +116,9 @@ class TestListApplications:
     @pytest.mark.asyncio
     async def test_response_shape(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             await _submit_app(client)
             response = await client.get("/api/v1/applications")
         data = response.json()
@@ -127,7 +139,9 @@ class TestListApplications:
     @pytest.mark.asyncio
     async def test_pagination(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             for _ in range(5):
                 await _submit_app(client)
             resp_all = await client.get("/api/v1/applications")
@@ -149,7 +163,9 @@ class TestListApplications:
     @pytest.mark.asyncio
     async def test_state_filter(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             await _submit_app(client)
             resp = await client.get("/api/v1/applications?state=APPROVED")
             data = resp.json()
@@ -159,7 +175,9 @@ class TestListApplications:
     @pytest.mark.asyncio
     async def test_final_decision_filter(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             await _submit_app(client)
             resp = await client.get("/api/v1/applications?final_decision=APPROVE")
             data = resp.json()
@@ -169,31 +187,39 @@ class TestListApplications:
     @pytest.mark.asyncio
     async def test_invalid_state_returns_422(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             response = await client.get("/api/v1/applications?state=BOGUS")
         assert response.status_code == 422
-        assert "INVALID_STATE" in response.json()["detail"]["error_code"]
+        assert "INVALID_STATE" in response.json()["error_code"]
 
     @pytest.mark.asyncio
     async def test_invalid_risk_level_returns_422(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             response = await client.get("/api/v1/applications?risk_level=NONSENSE")
         assert response.status_code == 422
-        assert "INVALID_RISK_LEVEL" in response.json()["detail"]["error_code"]
+        assert "INVALID_RISK_LEVEL" in response.json()["error_code"]
 
     @pytest.mark.asyncio
     async def test_invalid_final_decision_returns_422(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             response = await client.get("/api/v1/applications?final_decision=INVALID")
         assert response.status_code == 422
-        assert "INVALID_FINAL_DECISION" in response.json()["detail"]["error_code"]
+        assert "INVALID_FINAL_DECISION" in response.json()["error_code"]
 
     @pytest.mark.asyncio
     async def test_negative_offset_rejected(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             await _submit_app(client)
             resp = await client.get("/api/v1/applications?offset=-5")
         assert resp.status_code == 422
@@ -201,14 +227,18 @@ class TestListApplications:
     @pytest.mark.asyncio
     async def test_limit_over_100_rejected(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             resp = await client.get("/api/v1/applications?limit=500")
         assert resp.status_code == 422
 
     @pytest.mark.asyncio
     async def test_deterministic_ordering_newest_first(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             id1 = await _submit_app(client, applicant_name="First")
             id2 = await _submit_app(client, applicant_name="Second")
             resp = await client.get("/api/v1/applications")
@@ -219,7 +249,9 @@ class TestListApplications:
     @pytest.mark.asyncio
     async def test_total_count_matches_filter(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             await _submit_app(client)
             await _submit_app(client)
             resp_all = await client.get("/api/v1/applications")
@@ -238,7 +270,9 @@ class TestEnrichedStatus:
     @pytest.mark.asyncio
     async def test_status_includes_application_fields(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(
                 client,
                 applicant_name="Jane Smith",
@@ -260,7 +294,9 @@ class TestEnrichedStatus:
     @pytest.mark.asyncio
     async def test_status_includes_risk_fields(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             resp = await client.get(f"/api/v1/applications/{app_id}")
         data = resp.json()
@@ -272,7 +308,9 @@ class TestEnrichedStatus:
     @pytest.mark.asyncio
     async def test_status_includes_recommendation(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             resp = await client.get(f"/api/v1/applications/{app_id}")
         data = resp.json()
@@ -290,7 +328,9 @@ class TestEnrichedStatus:
     @pytest.mark.asyncio
     async def test_status_missing_information_has_missing_fields(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(
                 client,
                 applicant_name=None,
@@ -313,7 +353,9 @@ class TestEnrichedStatus:
     @pytest.mark.asyncio
     async def test_status_escalated_application(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(
                 client,
                 applicant_name="Escalate Test",
@@ -335,8 +377,10 @@ class TestEnrichedStatus:
     @pytest.mark.asyncio
     async def test_status_not_found(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/applications/nonexistent")
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
+            resp = await client.get("/api/v1/applications/00000000-0000-0000-0000-000000000000")
         assert resp.status_code == 404
 
 
@@ -352,7 +396,9 @@ class TestDocumentEndpoints:
         if not os.path.exists(pan_path):
             pytest.skip("Synthetic PAN card fixture not found")
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             with open(pan_path, "rb") as f:
                 resp = await client.post(
@@ -380,9 +426,11 @@ class TestDocumentEndpoints:
     @pytest.mark.asyncio
     async def test_upload_nonexistent_application_returns_404(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             resp = await client.post(
-                "/api/v1/applications/nonexistent/documents",
+                "/api/v1/applications/00000000-0000-0000-0000-000000000000/documents",
                 files={"file": ("test.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 50, "image/png")},
                 data={"document_type": "pan_card"},
             )
@@ -393,7 +441,9 @@ class TestDocumentEndpoints:
     @pytest.mark.asyncio
     async def test_list_documents_empty(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             resp = await client.get(f"/api/v1/applications/{app_id}/documents")
         assert resp.status_code == 200
@@ -407,7 +457,9 @@ class TestDocumentEndpoints:
         if not os.path.exists(pan_path):
             pytest.skip("Synthetic PAN card fixture not found")
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             with open(pan_path, "rb") as f:
                 await client.post(
@@ -434,8 +486,12 @@ class TestDocumentEndpoints:
     @pytest.mark.asyncio
     async def test_list_documents_nonexistent_application(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/applications/nonexistent/documents")
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
+            resp = await client.get(
+                "/api/v1/applications/00000000-0000-0000-0000-000000000000/documents"
+            )
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
@@ -444,7 +500,9 @@ class TestDocumentEndpoints:
         if not os.path.exists(pan_path):
             pytest.skip("Synthetic PAN card fixture not found")
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             with open(pan_path, "rb") as f:
                 upload_resp = await client.post(
@@ -469,7 +527,9 @@ class TestDocumentEndpoints:
         if not os.path.exists(pan_path):
             pytest.skip("Synthetic PAN card fixture not found")
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id1 = await _submit_app(client, applicant_name="App1")
             app_id2 = await _submit_app(client, applicant_name="App2")
             with open(pan_path, "rb") as f:
@@ -485,7 +545,9 @@ class TestDocumentEndpoints:
     @pytest.mark.asyncio
     async def test_get_single_document_nonexistent(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             resp = await client.get(f"/api/v1/applications/{app_id}/documents/nonexistent")
         assert resp.status_code == 404
@@ -496,7 +558,9 @@ class TestDocumentEndpoints:
         if not os.path.exists(pan_path):
             pytest.skip("Synthetic PAN card fixture not found")
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             with open(pan_path, "rb") as f:
                 upload_resp = await client.post(
@@ -518,7 +582,9 @@ class TestDocumentEndpoints:
     @pytest.mark.asyncio
     async def test_raw_text_nonexistent_document(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             resp = await client.get(f"/api/v1/applications/{app_id}/documents/nonexistent/raw-text")
         assert resp.status_code == 404
@@ -529,7 +595,9 @@ class TestDocumentEndpoints:
         if not os.path.exists(pan_path):
             pytest.skip("Synthetic PAN card fixture not found")
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id1 = await _submit_app(client, applicant_name="App1")
             app_id2 = await _submit_app(client, applicant_name="App2")
             with open(pan_path, "rb") as f:
@@ -552,19 +620,22 @@ class TestErrorResponses:
     @pytest.mark.asyncio
     async def test_404_has_standardized_shape(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/applications/nonexistent")
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
+            resp = await client.get("/api/v1/applications/00000000-0000-0000-0000-000000000000")
         assert resp.status_code == 404
         data = resp.json()
         assert "error_code" in data
         assert "message" in data
         assert data["error_code"] == "APPLICATION_NOT_FOUND"
-        assert "nonexistent" in data["message"]
 
     @pytest.mark.asyncio
     async def test_document_404_has_same_shape(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             resp = await client.get(f"/api/v1/applications/{app_id}/documents/nonexistent")
         assert resp.status_code == 404
@@ -576,11 +647,11 @@ class TestErrorResponses:
     @pytest.mark.asyncio
     async def test_raw_text_404_has_same_shape(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
-            resp = await client.get(
-                f"/api/v1/applications/{app_id}/documents/nonexistent/raw-text"
-            )
+            resp = await client.get(f"/api/v1/applications/{app_id}/documents/nonexistent/raw-text")
         assert resp.status_code == 404
         data = resp.json()
         assert "error_code" in data
@@ -590,7 +661,9 @@ class TestErrorResponses:
     @pytest.mark.asyncio
     async def test_upload_invalid_file_returns_400(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             resp = await client.post(
                 f"/api/v1/applications/{app_id}/documents",
@@ -599,13 +672,16 @@ class TestErrorResponses:
             )
         assert resp.status_code == 400
         data = resp.json()
-        assert "detail" in data
+        assert "error_code" in data
+        assert "message" in data
 
     @pytest.mark.asyncio
     async def test_no_secrets_in_error_response(self):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            resp = await client.get("/api/v1/applications/nonexistent")
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
+            resp = await client.get("/api/v1/applications/00000000-0000-0000-0000-000000000000")
         raw = resp.text
         assert "api_key" not in raw.lower()
         assert "Bearer" not in raw
@@ -624,7 +700,9 @@ class TestNoPathExposure:
         if not os.path.exists(pan_path):
             pytest.skip("Synthetic PAN card fixture not found")
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             with open(pan_path, "rb") as f:
                 resp = await client.post(
@@ -643,7 +721,9 @@ class TestNoPathExposure:
         if not os.path.exists(pan_path):
             pytest.skip("Synthetic PAN card fixture not found")
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", headers=AUTH_HEADERS
+        ) as client:
             app_id = await _submit_app(client)
             with open(pan_path, "rb") as f:
                 upload_resp = await client.post(

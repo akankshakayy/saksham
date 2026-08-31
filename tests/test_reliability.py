@@ -434,7 +434,7 @@ async def test_api_returns_503_on_persistence_failure(db):
     from app.main import app
     from app.memory.database import get_database
 
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-API-Key": "test-secret-key-12345"})
     global_db = get_database()
 
     original_execute = global_db.conn.execute

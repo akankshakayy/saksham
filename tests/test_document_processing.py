@@ -392,7 +392,7 @@ class TestAPIUploadEndpoint:
         from fastapi.testclient import TestClient
         from app.main import app
 
-        client = TestClient(app)
+        client = TestClient(app, headers={"X-API-Key": "test-secret-key-12345"})
         # Just verify the route exists by checking OpenAPI schema
         response = client.get("/openapi.json")
         assert response.status_code == 200
